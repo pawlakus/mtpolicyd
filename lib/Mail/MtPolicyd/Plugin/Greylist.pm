@@ -85,11 +85,11 @@ Apply netmask for IPv4 client_address. Gmail and other providers often retry fro
 
 Default is 32 for backward compatibility, but it is advised to set it to /24 or /20.
 
-=item ip6_mask (default: 128)
+=item ip6_mask (default: 64)
 
 Apply netmask for IPv6 client_address. Gmail and other providers often retry from a different IP address within the subnet.
 
-Default is 128 for backward compatiblility, but it is advised to set it to /64 or /56.
+Default is 64, but it is advised to set it to /56 or /48.
 
 =item use_autowl (default: 1)
 
@@ -290,12 +290,12 @@ sub _extract_subnet {
 	my ( $self, $client_ip ) = @_;
 	my $ip;
 	if( index($client_ip, ':') != -1 ) {
-		$ip = NetAddr::IP->new("$client_ip/" . $self->ip6_mask);
+		$ip = NetAddr::IP->new( $client_ip."/".$self->ip6_mask );
 	} else {
-		$ip = NetAddr::IP->new("$client_ip/" . $self->ip_mask);
+		$ip = NetAddr::IP->new( $client_ip."/".$self->ip_mask );
 	}
 	if( defined $ip ) {
-		return $ip->network()->addr();
+		return $ip->network->addr;
 	}
 	return $client_ip;
 }
