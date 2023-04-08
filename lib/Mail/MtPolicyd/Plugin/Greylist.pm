@@ -15,6 +15,7 @@ with 'Mail::MtPolicyd::Plugin::Role::UserConfig' => {
 use Mail::MtPolicyd::Plugin::Result;
 use Time::Piece;
 use Time::Seconds;
+use NetAddr::IP qw(:lower);
 
 =head1 DESCRIPTION
 
@@ -77,6 +78,18 @@ A client will have to wait at least for this timeout. (in seconds)
 =item max_retry_wait (default: 7200 (2h))
 
 A client must retry to deliver the message before this timeout. (in seconds)
+
+=item ip_mask (default: 32)
+
+Apply netmask for IPv4 client_address. Gmail and other providers often retry from a different IP address within the subnet.
+
+Default is 32 for backward compatibility, but it is advised to set it to /24 or /20.
+
+=item ip6_mask (default: 128)
+
+Apply netmask for IPv6 client_address. Gmail and other providers often retry from a different IP address within the subnet.
+
+Default is 128 for backward compatiblility, but it is advised to set it to /64 or /56.
 
 =item use_autowl (default: 1)
 
@@ -142,6 +155,9 @@ has 'autowl_threshold' => ( is => 'rw', isa => 'Int', default => 3 );
 has 'query_autowl' => ( is => 'rw', isa => 'Bool', default => 1 );
 has 'create_ticket' => ( is => 'rw', isa => 'Bool', default => 1 );
 
+has 'ip_mask' => ( is => 'rw', isa => 'Int', default => 32 );
+has 'ip6_mask' => ( is => 'rw', isa => 'Int', default => 64 );
+
 sub _load_backend {
   my ( $self, $backend ) = @_;
   my $module = $self->$backend->{'module'};
@@ -204,7 +220,7 @@ sub run {
 	my $ip = $r->attr('client_address');
 	my $sender = $r->attr('sender');
 	my $recipient = $r->attr('recipient');
-	my @triplet = ($sender, $ip, $recipient);
+	my @triplet = ($sender, $self->_extract_subnet($ip), $recipient);
 	my $session = $r->session;
 
 	my $enabled = $self->get_uc( $session, 'enabled' );
@@ -268,6 +284,20 @@ sub success {
 		) );
 	}
 	return;
+}
+
+sub _extract_subnet {
+	my ( $self, $client_ip ) = @_;
+	my $ip;
+	if( index($client_ip, ':') != -1 ) {
+		$ip = NetAddr::IP->new("$client_ip/" . $self->ip6_mask);
+	} else {
+		$ip = NetAddr::IP->new("$client_ip/" . $self->ip_mask);
+	}
+	if( defined $ip ) {
+		return $ip->network()->addr();
+	}
+	return $client_ip;
 }
 
 sub _extract_sender_domain {
